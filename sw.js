@@ -1,5 +1,5 @@
 /* Shortwave PWA service worker — アプリ本体をキャッシュしてオフラインでも起動できるようにする */
-const CACHE = "shortwave-v1";
+const CACHE = "shortwave-v2";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
