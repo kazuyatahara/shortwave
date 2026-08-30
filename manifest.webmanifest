@@ -1,6 +1,6 @@
 {
-  "name": "Shortwave — AI曲ショート動画メーカー",
-  "short_name": "Shortwave",
+  "name": "ショート動画つくる君",
+  "short_name": "つくる君",
   "description": "AI曲を読み込むだけで、ビジュアライザー付きの縦型ショート動画を書き出せるアプリ。完全ローカル処理。",
   "start_url": ".",
   "scope": ".",
