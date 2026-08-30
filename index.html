@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shortwave</title>
+<title>ショート動画つくる君</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0C0F1E">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Shortwave">
+<meta name="apple-mobile-web-app-title" content="つくる君">
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@700&family=Shippori+Mincho+B1:wght@700&family=Yusei+Magic&family=RocknRoll+One&display=swap">
 <style>
@@ -168,7 +168,7 @@ canvas#lyricWave:active{cursor:grabbing}
 </head>
 <body>
 <header class="app">
-  <span class="logo">SHORTWAVE</span>
+  <span class="logo">ショート動画つくる君</span>
   <span class="tagline">AI曲を、そのままショート動画に。</span>
   <span class="local-badge">100% ローカル処理・アップロードなし</span>
 </header>
@@ -246,7 +246,7 @@ canvas#lyricWave:active{cursor:grabbing}
         <button class="btn small" id="coverBtn">画像を選ぶ</button>
         <button class="btn small" id="coverClear" style="display:none">クリア</button>
         <label style="font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px">
-          <input type="checkbox" id="coverShow" checked style="accent-color:var(--accent)">中央に表示（オフでレコード盤も消える）
+          <input type="checkbox" id="coverShow" checked style="accent-color:var(--accent)">選んだ画像を中央に表示
         </label>
         <input type="file" id="coverInput" accept="image/*" class="visually-hidden">
       </div>
@@ -393,7 +393,7 @@ canvas#lyricWave:active{cursor:grabbing}
   </div>
 </div>
 
-<footer class="app">Shortwave — 音源も画像もブラウザの外へは送信されません。すべてこの端末の中だけで処理されます。
+<footer class="app">ショート動画つくる君 — 音源も画像もブラウザの外へは送信されません。すべてこの端末の中だけで処理されます。
   <button class="btn small" id="saveAppBtn" style="display:none;margin-left:10px">💾 アプリ本体をローカル保存（オフラインで使える）</button>
 </footer>
 
@@ -524,7 +524,7 @@ async function loadDemo(len){
   ensureCtx();
   $("demoBtn").textContent="生成中…";
   state.buffer=await makeDemoTrack(len);
-  state.fileName="デモ曲（Shortwave内蔵）";
+  state.fileName="デモ曲（アプリ内蔵）";
   if(!$("titleInput").value){state.title="Midnight Drive";$("titleInput").value=state.title}
   if(!$("artistInput").value){state.artist="AI DEMO";$("artistInput").value=state.artist}
   $("demoBtn").textContent="🎹 デモ曲でためす";
@@ -794,36 +794,19 @@ function roundRect(x,y,w,h,r){
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
 }
 function drawCover(th,cx,cy,size,bass){
+  /* ジャケット画像があるときだけ表示（レコード盤は廃止） */
+  if(!state.cover)return;
   const glow=size*.62+bass*40;
   const rg=ctx.createRadialGradient(cx,cy,size*.3,cx,cy,glow+size*.35);
   rg.addColorStop(0,rgba(th.a,.35));rg.addColorStop(1,"rgba(0,0,0,0)");
   ctx.fillStyle=rg;ctx.beginPath();ctx.arc(cx,cy,glow+size*.35,0,7);ctx.fill();
-  if(state.cover){
-    ctx.save();
-    roundRect(cx-size/2,cy-size/2,size,size,42);
-    ctx.clip();
-    ctx.drawImage(state.cover,cx-size/2,cy-size/2,size,size);
-    ctx.restore();
-    ctx.lineWidth=4;ctx.strokeStyle="rgba(255,255,255,.25)";
-    roundRect(cx-size/2,cy-size/2,size,size,42);ctx.stroke();
-  }else{
-    // レコード盤
-    ctx.save();ctx.translate(cx,cy);ctx.rotate(coverAngle);
-    const r=size/2;
-    const disc=ctx.createRadialGradient(0,0,0,0,0,r);
-    disc.addColorStop(0,"#20263f");disc.addColorStop(.55,"#0e1120");disc.addColorStop(1,"#1a2038");
-    ctx.fillStyle=disc;ctx.beginPath();ctx.arc(0,0,r,0,7);ctx.fill();
-    ctx.strokeStyle="rgba(255,255,255,.06)";ctx.lineWidth=3;
-    for(let i=1;i<=6;i++){ctx.beginPath();ctx.arc(0,0,r*(.42+i*.09),0,7);ctx.stroke()}
-    const lb=ctx.createLinearGradient(-r*.35,-r*.35,r*.35,r*.35);
-    lb.addColorStop(0,th.a);lb.addColorStop(1,th.b);
-    ctx.fillStyle=lb;ctx.beginPath();ctx.arc(0,0,r*.34,0,7);ctx.fill();
-    ctx.fillStyle="#0C0F1E";ctx.beginPath();ctx.arc(0,0,r*.045,0,7);ctx.fill();
-    ctx.rotate(-coverAngle*1.6);
-    ctx.strokeStyle="rgba(255,255,255,.35)";ctx.lineWidth=6;
-    ctx.beginPath();ctx.arc(0,0,r*.985,-.5,.7);ctx.stroke();
-    ctx.restore();
-  }
+  ctx.save();
+  roundRect(cx-size/2,cy-size/2,size,size,42);
+  ctx.clip();
+  ctx.drawImage(state.cover,cx-size/2,cy-size/2,size,size);
+  ctx.restore();
+  ctx.lineWidth=4;ctx.strokeStyle="rgba(255,255,255,.25)";
+  roundRect(cx-size/2,cy-size/2,size,size,42);ctx.stroke();
 }
 function drawBars(th,bass){
   const n=52,bw=W/n*.62,gap=W/n,y0=H*.845;
@@ -1838,7 +1821,7 @@ function loadSettings(){
 }
 $("saveAppBtn").addEventListener("click",async()=>{
   if(!dlNS)return;
-  try{await dlNS.save({filename:"Shortwave.html",data:PAGE_SRC})}catch(e){}
+  try{await dlNS.save({filename:"ショート動画つくる君.html",data:PAGE_SRC})}catch(e){}
 });
 
 /* スクショ・自動デモ用: ?demo=1&style=ring&theme=neon&title=..&artist=.. */
