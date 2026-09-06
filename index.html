@@ -146,6 +146,12 @@ footer.app{padding:6px 28px 30px;color:var(--muted);font-size:11.5px}
   padding:3px 7px;font-size:11px;flex:none;line-height:1.3}
 .tl-btn:hover{border-color:var(--accent2)}
 .tl-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tl-textin{flex:1;min-width:80px;background:transparent;border:1px solid transparent;border-radius:6px;
+  padding:3px 7px;font-size:12.5px;font-family:inherit;color:inherit}
+.tl-textin:hover{border-color:var(--line)}
+.tl-textin:focus{border-color:var(--accent2);background:var(--panel);outline:none}
+.tl-del{color:var(--muted)}
+.tl-del:hover{color:var(--accent);border-color:var(--accent)}
 .lw-box{margin-bottom:10px}
 canvas#lyricWave{width:100%;height:88px;display:block;border-radius:8px;background:#0A0D18;
   touch-action:none;cursor:grab}
@@ -298,9 +304,14 @@ canvas#lyricWave:active{cursor:grabbing}
         <input type="text" id="handleInput" placeholder="@your_id（動画上部に小さく透かし表示）" maxlength="30">
       </div>
       <div class="row">
-        <label class="fl">文字サイズ</label>
+        <label class="fl">曲名サイズ</label>
         <input type="range" id="fontScale" min="60" max="150" value="100">
         <span class="val" id="fontVal">100%</span>
+      </div>
+      <div class="row">
+        <label class="fl">歌詞サイズ</label>
+        <input type="range" id="lyricScale" min="60" max="150" value="100">
+        <span class="val" id="lyricVal">100%</span>
       </div>
       <div class="row">
         <label class="fl">歌詞テロップ</label>
@@ -319,7 +330,8 @@ canvas#lyricWave:active{cursor:grabbing}
       <div id="tlWrap" style="display:none">
         <div class="tl-head">
           <span>🎬 タイムライン編集</span>
-          <span style="margin-left:auto;display:flex;gap:6px">
+          <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn small" id="tlSpread" title="書き出し範囲に等間隔でタイミングを置く">⚡ 均等配置</button>
             <button class="btn small" id="tlSort">時間順に並べ替え</button>
             <button class="btn small" id="tlClearTimes">時間を全消去</button>
           </span>
@@ -429,7 +441,7 @@ const THEMES={
 const state={
   buffer:null,fileName:"",style:"bars",theme:"sunset",
   cover:null,bg:null,bgVideo:null,title:"",artist:"",handle:"",fontScale:1,
-  font:"gothic",effect:"none",coverShow:true,coverScale:1,bgFit:"cover",bgScale:1,
+  font:"gothic",effect:"none",coverShow:true,coverScale:1,bgFit:"cover",bgScale:1,lyricScale:1,
   clipLen:30,clipStart:0,fade:true,
   playing:false,recording:false,startedAt:0,offset:0
 };
@@ -967,7 +979,8 @@ function renderTimeline(){
              +'<button class="tl-btn" data-i="'+i+'" data-act="p5">＋.5</button>':"")
       +'<button class="tl-btn" data-i="'+i+'" data-act="now" title="いまの再生位置をこの行にセット">⏺</button>'
       +(timed?'<button class="tl-btn" data-i="'+i+'" data-act="play" title="この行の1秒前から試聴">▶</button>':"")
-      +'<span class="tl-text">'+escHtml(l.text)+'</span>'
+      +'<input class="tl-textin" data-i="'+i+'" value="'+escHtml(l.text)+'" title="クリックで歌詞を直接編集">'
+      +'<button class="tl-btn tl-del" data-i="'+i+'" data-act="del" title="この行を削除">✕</button>'
       +'</div>';
   });
   rows.innerHTML=html;
@@ -1118,7 +1131,26 @@ $("tlRows").addEventListener("click",e=>{
     writeLyricsBack();
   }else if(act==="play"&&l.t!=null){
     playFrom(Math.max(0,l.t-1));
+  }else if(act==="del"){
+    lyrics.splice(i,1);
+    writeLyricsBack();
   }
+});
+/* 行テキストの直接編集（確定時に反映） */
+$("tlRows").addEventListener("change",e=>{
+  const inp=e.target.closest(".tl-textin");if(!inp)return;
+  const l=lyrics[+inp.dataset.i];if(!l)return;
+  const v=inp.value.trim();
+  if(v)l.text=v;
+  writeLyricsBack();
+});
+/* 書き出し範囲に等間隔でタイミングを自動配置 */
+$("tlSpread").addEventListener("click",()=>{
+  if(!state.buffer){alert("先に曲を読み込んでください。");return}
+  if(!lyrics.length)return;
+  const {start,len}=clipRange(),n=lyrics.length;
+  lyrics.forEach((l,i)=>l.t=Math.round((start+i*len/n)*10)/10);
+  writeLyricsBack();
 });
 $("tlSort").addEventListener("click",()=>{
   lyrics.sort((a,b)=>(a.t==null?1e9:a.t)-(b.t==null?1e9:b.t));
@@ -1141,20 +1173,39 @@ function currentLyricIdx(){
   if(rel<0||rel>=1)return -1;
   return Math.min(lyrics.length-1,Math.floor(rel*lyrics.length));
 }
+function wrapJp(text,maxW){
+  /* 文字単位で折り返し（最大3行、超過は…） */
+  const lines=[];let cur="";
+  for(const ch of text){
+    if(cur&&ctx.measureText(cur+ch).width>maxW){
+      lines.push(cur);cur=ch;
+      if(lines.length>=3){lines[2]=lines[2].slice(0,-1)+"…";return lines}
+    }else cur+=ch;
+  }
+  if(cur)lines.push(cur);
+  return lines;
+}
 function drawLyrics(th){
   const idx=currentLyricIdx();
   if(idx<0||!lyrics[idx]||!lyrics[idx].text)return;
   const F=FONTS[state.font]||FONTS.gothic;
   ctx.textAlign="center";ctx.textBaseline="alphabetic";
   ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=24;ctx.shadowOffsetY=3;
-  fitText(lyrics[idx].text,W*.88,58*state.fontScale,F.w,F.fam);
+  /* サイズは常に一定（長い行は縮小せず折り返す） */
+  const size=52*state.lyricScale,lh=size*1.32;
+  ctx.font=F.w+" "+size+"px "+F.fam;
+  const lines=wrapJp(lyrics[idx].text,W*.88);
+  const baseY=H*.75-(lines.length-1)*lh/2;
   ctx.fillStyle="#fff";
-  ctx.fillText(lyrics[idx].text,W/2,H*.75);
+  lines.forEach((ln,k)=>ctx.fillText(ln,W/2,baseY+k*lh));
   const nxt=lyrics[idx+1];
   if(nxt&&nxt.text){
-    fitText(nxt.text,W*.8,34*state.fontScale,F.sub,F.fam);
+    const ns=size*.58;
+    ctx.font=F.sub+" "+ns+"px "+F.fam;
+    let ntxt=nxt.text;
+    while(ntxt.length>2&&ctx.measureText(ntxt).width>W*.8)ntxt=ntxt.slice(0,-2)+"…";
     ctx.fillStyle="rgba(255,255,255,.42)";
-    ctx.fillText(nxt.text,W/2,H*.75+58*state.fontScale);
+    ctx.fillText(ntxt,W/2,baseY+(lines.length-1)*lh+lh*.85);
   }
   ctx.shadowBlur=0;ctx.shadowOffsetY=0;
 }
@@ -1566,6 +1617,11 @@ $("fontScale").addEventListener("input",e=>{
   $("fontVal").textContent=e.target.value+"%";
   saveSettings();
 });
+$("lyricScale").addEventListener("input",e=>{
+  state.lyricScale=e.target.value/100;
+  $("lyricVal").textContent=e.target.value+"%";
+  saveSettings();
+});
 $("lyricsInput").addEventListener("input",()=>{
   parseLyrics();
   clearTimeout(histTimer);
@@ -1773,7 +1829,7 @@ function saveSettings(){
       style:state.style,theme:state.theme,fontScale:state.fontScale,
       artist:state.artist,handle:state.handle,clipLen:state.clipLen,fade:state.fade,
       font:state.font,effect:state.effect,coverShow:state.coverShow,coverScale:state.coverScale,
-      bgFit:state.bgFit,bgScale:state.bgScale
+      bgFit:state.bgFit,bgScale:state.bgScale,lyricScale:state.lyricScale
     }));
   }catch(e){}
 }
@@ -1794,6 +1850,11 @@ function loadSettings(){
   if(s.bgFit==="cover"||s.bgFit==="fit"){
     state.bgFit=s.bgFit;
     [...$("bgFitChips").children].forEach(c=>c.classList.toggle("on",c.dataset.bgfit===s.bgFit));
+  }
+  if(s.lyricScale>=.6&&s.lyricScale<=1.5){
+    state.lyricScale=s.lyricScale;
+    const p=Math.round(s.lyricScale*100);
+    $("lyricScale").value=p;$("lyricVal").textContent=p+"%";
   }
   if(s.bgScale>=.5&&s.bgScale<=1){
     state.bgScale=s.bgScale;
